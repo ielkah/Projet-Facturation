@@ -1,14 +1,17 @@
 "use client";
 
+"use client";
+
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { 
   Clock, AlertTriangle, CheckCircle2, Plus, 
   BellRing, Filter, Check, RotateCcw, Trash2, Eye,
-  Search, ArrowUpDown, X, Download, Pencil 
+  Search, ArrowUpDown, X, Download, Pencil, LogOut 
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { Invoice, InvoiceStatus } from '@/types/invoice';
+import { useRouter } from 'next/navigation';
 
 export default function DashboardPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -200,6 +203,16 @@ export default function DashboardPage() {
           >
             <Plus size={16} /> Nouvelle facture
           </Link>
+          <button
+          onClick={async () => {
+            await supabase.auth.signOut();
+            window.location.href = '/login';
+          }}
+          title="Se déconnecter"
+          className="p-3 bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-rose-400 border border-slate-800 rounded-xl transition-all"
+        >
+          <LogOut size={16} />
+        </button>
         </header>
 
         {/* KPIs */}
