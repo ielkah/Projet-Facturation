@@ -4,7 +4,8 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { 
   Clock, AlertTriangle, CheckCircle2, Plus, 
-  BellRing, Filter, Check, RotateCcw, Trash2 
+  BellRing, Filter, Check, RotateCcw, Trash2, Eye,
+  Search, ArrowUpDown, X
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { Invoice, InvoiceStatus } from '@/types/invoice';
@@ -13,8 +14,12 @@ export default function DashboardPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState<'all' | InvoiceStatus>('all');
+  
+  // Nouveaux états de recherche et de tri
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
 
-  // Récupération des données depuis Supabase
+  // Récupération des factures
   const fetchInvoices = async () => {
     const { data, error } = await supabase
       .from('invoices')
@@ -47,9 +52,7 @@ export default function DashboardPage() {
     fetchInvoices();
   }, []);
 
-  // Modification du statut dans Supabase et mise à jour de l'état local
   const handleUpdateStatus = async (id: string, newStatus: InvoiceStatus) => {
-    // Mise à jour optimiste dans l'UI
     setInvoices(prev => 
       prev.map(inv => inv.id === id ? { ...inv, status: newStatus } : inv)
     );
@@ -60,14 +63,13 @@ export default function DashboardPage() {
       .eq('id', id);
 
     if (error) {
-      alert(`Erreur lors de la mise à jour : ${error.message}`);
-      fetchInvoices(); // Restauration en cas d'erreur
+      alert(`Erreur : ${error.message}`);
+      fetchInvoices();
     }
   };
 
-  // Suppression d'une facture
   const handleDeleteInvoice = async (id: string, invoiceNumber: string) => {
-    if (!confirm(`Confirmer la suppression de la facture ${invoiceNumber} ?`)) return;
+    if (!confirm(`Supprimer définitivement la facture ${invoiceNumber} ?`)) return;
 
     setInvoices(prev => prev.filter(inv => inv.id !== id));
 
@@ -77,7 +79,7 @@ export default function DashboardPage() {
       .eq('id', id);
 
     if (error) {
-      alert(`Erreur de suppression : ${error.message}`);
+      alert(`Erreur : ${error.message}`);
       fetchInvoices();
     }
   };
@@ -88,19 +90,34 @@ export default function DashboardPage() {
   const formatCurrency = (val: number) => 
     new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(val);
 
-  // Recalcul en temps réel des KPIs
+  // KPIs
   const totalPaid = invoices.filter(i => i.status === 'paid').reduce((s, i) => s + calculateTotal(i), 0);
   const totalPending = invoices.filter(i => i.status === 'pending').reduce((s, i) => s + calculateTotal(i), 0);
   const totalOverdue = invoices.filter(i => i.status === 'overdue').reduce((s, i) => s + calculateTotal(i), 0);
 
-  const filteredInvoices = activeFilter === 'all' 
-    ? invoices 
-    : invoices.filter(i => i.status === activeFilter);
+  // Filtrage combiné (Statut + Texte) et Tri (Date)
+  const filteredInvoices = invoices
+    .filter((inv) => {
+      const matchesStatus = activeFilter === 'all' || inv.status === activeFilter;
+      const term = searchTerm.toLowerCase().trim();
+      const matchesSearch = 
+        !term ||
+        inv.number.toLowerCase().includes(term) ||
+        inv.clientName.toLowerCase().includes(term) ||
+        inv.projectTitle.toLowerCase().includes(term);
+
+      return matchesStatus && matchesSearch;
+    })
+    .sort((a, b) => {
+      const dateA = new Date(a.dueDate).getTime();
+      const dateB = new Date(b.dueDate).getTime();
+      return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
+    });
 
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center text-indigo-400 font-mono text-sm">
-        Chargement des données en direct...
+        Chargement des données...
       </div>
     );
   }
@@ -109,7 +126,7 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-slate-950 text-slate-100 p-8 md:p-12">
       <div className="max-w-6xl mx-auto space-y-10">
         
-        {/* En-tête */}
+        {/* Header */}
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-900 pb-8">
           <div>
             <span className="text-indigo-400 text-xs font-bold uppercase tracking-widest block mb-1">
@@ -127,7 +144,7 @@ export default function DashboardPage() {
           </Link>
         </header>
 
-        {/* Cartes KPI */}
+        {/* KPIs */}
         <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-slate-900/50 border border-slate-800/80 p-6 rounded-2xl">
             <div className="flex items-center justify-between text-slate-400 mb-4">
@@ -157,29 +174,63 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        {/* Liste des factures */}
-        <section className="bg-slate-900/30 border border-slate-900 rounded-2xl p-6">
-          <div className="flex items-center justify-between flex-wrap gap-4 mb-6">
-            <div className="flex items-center gap-2">
-              <Filter size={16} className="text-indigo-400" />
-              <h2 className="text-sm font-bold uppercase tracking-wider text-white">Factures récentes</h2>
-            </div>
+        {/* Section Table avec Barre d'outils */}
+        <section className="bg-slate-900/30 border border-slate-900 rounded-2xl p-6 space-y-6">
+          
+          {/* Barre d'outils : Recherche + Tri + Filtres de statuts */}
+          <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
             
-            <div className="flex items-center gap-2 bg-slate-950 p-1 rounded-xl border border-slate-800">
-              {(['all', 'paid', 'pending', 'overdue'] as const).map(tab => (
+            {/* Champ de recherche textuelle */}
+            <div className="relative flex-1 max-w-md">
+              <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
+              <input
+                type="text"
+                placeholder="Rechercher par client, référence, projet..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl pl-9 pr-9 py-2 text-xs text-white placeholder:text-slate-500 outline-none transition-colors"
+              />
+              {searchTerm && (
                 <button
-                  key={tab}
-                  onClick={() => setActiveFilter(tab)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
-                    activeFilter === tab ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
-                  }`}
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
                 >
-                  {tab === 'all' ? 'Toutes' : tab === 'paid' ? 'Payées' : tab === 'pending' ? 'En cours' : 'Retards'}
+                  <X size={14} />
                 </button>
-              ))}
+              )}
             </div>
+
+            {/* Tri par date et Filtres statut */}
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Bouton de bascule de tri par date */}
+              <button
+                onClick={() => setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc')}
+                className="px-3 py-1.5 bg-slate-950 border border-slate-800 hover:border-slate-700 rounded-xl text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5 transition-colors"
+                title="Inverser le tri par date"
+              >
+                <ArrowUpDown size={13} className="text-indigo-400" />
+                {sortOrder === 'desc' ? 'Plus récentes' : 'Plus anciennes'}
+              </button>
+
+              {/* Onglets de statut */}
+              <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
+                {(['all', 'paid', 'pending', 'overdue'] as const).map(tab => (
+                  <button
+                    key={tab}
+                    onClick={() => setActiveFilter(tab)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
+                      activeFilter === tab ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    {tab === 'all' ? 'Toutes' : tab === 'paid' ? 'Payées' : tab === 'pending' ? 'En cours' : 'Retards'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
           </div>
 
+          {/* Tableau des factures */}
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs text-slate-300">
               <thead className="border-b border-slate-800 text-slate-500 uppercase font-mono tracking-wider">
@@ -189,14 +240,16 @@ export default function DashboardPage() {
                   <th className="pb-3 px-4">Échéance</th>
                   <th className="pb-3 px-4">Montant HT</th>
                   <th className="pb-3 px-4">Statut</th>
-                  <th className="pb-3 px-4 text-right">Actions rapides</th>
+                  <th className="pb-3 px-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-900/60">
                 {filteredInvoices.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-8 text-center text-slate-500 italic">
-                      Aucune facture dans cette catégorie.
+                    <td colSpan={6} className="py-12 text-center text-slate-500 italic">
+                      {searchTerm 
+                        ? `Aucun résultat pour "${searchTerm}".` 
+                        : "Aucune facture dans cette catégorie."}
                     </td>
                   </tr>
                 ) : (
@@ -230,7 +283,14 @@ export default function DashboardPage() {
                       </td>
                       <td className="py-4 px-4 text-right">
                         <div className="flex items-center justify-end gap-2">
-                          {/* Action : Marquer Payée */}
+                          <Link
+                            href={`/factures/${inv.id}`}
+                            title="Consulter et imprimer le PDF"
+                            className="p-1.5 text-slate-400 hover:text-white bg-slate-900 border border-slate-800 hover:border-indigo-500/50 rounded-lg transition-all"
+                          >
+                            <Eye size={13} />
+                          </Link>
+
                           {inv.status !== 'paid' && (
                             <button
                               onClick={() => handleUpdateStatus(inv.id, 'paid')}
@@ -241,7 +301,6 @@ export default function DashboardPage() {
                             </button>
                           )}
 
-                          {/* Action : Basculer en Retard */}
                           {inv.status === 'pending' && (
                             <button
                               onClick={() => handleUpdateStatus(inv.id, 'overdue')}
@@ -252,10 +311,9 @@ export default function DashboardPage() {
                             </button>
                           )}
 
-                          {/* Action : Relancer un client en retard */}
                           {inv.status === 'overdue' && (
                             <button
-                              onClick={() => alert(`Relance envoyée par email à ${inv.clientName} (${inv.clientEmail || 'contact client'}).`)}
+                              onClick={() => alert(`Relance envoyée à ${inv.clientName} (${inv.clientEmail || 'email non renseigné'}).`)}
                               title="Envoyer un rappel"
                               className="px-2.5 py-1 bg-rose-500/20 text-rose-300 hover:bg-rose-500/30 border border-rose-500/30 rounded-lg text-[10px] font-bold uppercase inline-flex items-center gap-1 transition-all"
                             >
@@ -263,18 +321,16 @@ export default function DashboardPage() {
                             </button>
                           )}
 
-                          {/* Action : Rétablir en attente */}
                           {inv.status === 'paid' && (
                             <button
                               onClick={() => handleUpdateStatus(inv.id, 'pending')}
-                              title="Rétablir le statut"
+                              title="Rétablir en attente"
                               className="p-1.5 text-slate-400 hover:text-white bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-lg transition-all"
                             >
                               <RotateCcw size={13} />
                             </button>
                           )}
 
-                          {/* Action : Supprimer */}
                           <button
                             onClick={() => handleDeleteInvoice(inv.id, inv.number)}
                             title="Supprimer la facture"
