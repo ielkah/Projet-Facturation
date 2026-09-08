@@ -19,8 +19,8 @@ export default function NewInvoicePage() {
     clientEmail: 'hello@monochrome.design',
     clientAddress: '24 rue Châteaudun, 75009 Paris',
     projectTitle: 'Refonte CMS Headless & Direction Artistique',
-    issueDate: '2026-09-07',
-    dueDate: '2026-10-07',
+    issueDate: '2026-09-08',
+    dueDate: '2026-10-08',
     status: 'pending',
     taxRate: 20,
     discountPercent: 0,
@@ -56,6 +56,16 @@ export default function NewInvoicePage() {
     setLoading(true);
 
     try {
+      // 1. Récupération de l'utilisateur actif
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+      if (userError || !user) {
+        alert("Session expirée ou utilisateur non connecté. Veuillez vous reconnecter.");
+        router.push('/login');
+        return;
+      }
+
+      // 2. Payload avec association user_id
       const payload = {
         id: `inv-${Date.now()}`,
         number: invoice.number,
@@ -68,7 +78,8 @@ export default function NewInvoicePage() {
         status: invoice.status,
         tax_rate: invoice.taxRate,
         discount_percent: invoice.discountPercent,
-        items: invoice.items
+        items: invoice.items,
+        user_id: user.id // Liaison au compte connecté
       };
 
       const { error } = await supabase.from('invoices').insert([payload]);
@@ -80,9 +91,9 @@ export default function NewInvoicePage() {
       }
 
       router.push('/dashboard');
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('Une erreur inattendue est survenue.');
+      alert(err?.message || 'Une erreur inattendue est survenue.');
       setLoading(false);
     }
   };
@@ -151,6 +162,30 @@ export default function NewInvoicePage() {
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs text-white focus:border-indigo-500 outline-none"
                 />
               </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Email client</label>
+                  <input
+                    type="email"
+                    value={invoice.clientEmail || ''}
+                    onChange={(e) => setInvoice({ ...invoice, clientEmail: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs text-white focus:border-indigo-500 outline-none"
+                    placeholder="contact@client.com"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Adresse client</label>
+                  <input
+                    type="text"
+                    value={invoice.clientAddress || ''}
+                    onChange={(e) => setInvoice({ ...invoice, clientAddress: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs text-white focus:border-indigo-500 outline-none"
+                    placeholder="Adresse de facturation"
+                  />
+                </div>
+              </div>
+
               <div>
                 <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Intitulé du projet</label>
                 <input
