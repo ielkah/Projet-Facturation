@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Printer, CheckCircle2, AlertTriangle, Clock } from 'lucide-react';
+import { ArrowLeft, Printer, CheckCircle2, AlertTriangle, Clock, Pencil } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { Invoice } from '@/types/invoice';
 import InvoiceDocument from '@/components/InvoiceDocument';
@@ -99,6 +99,12 @@ export default function InvoiceDetailPage() {
             >
               <Printer size={14} /> Imprimer / PDF
             </button>
+            <Link
+            href={`/factures/${invoice.id}/modifier`}
+            className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl border border-slate-800 text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-all"
+            >
+            <Pencil size={14} /> Modifier
+            </Link>
           </div>
         </div>
 

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { 
   Clock, AlertTriangle, CheckCircle2, Plus, 
   BellRing, Filter, Check, RotateCcw, Trash2, Eye,
-  Search, ArrowUpDown, X
+  Search, ArrowUpDown, X, Download, Pencil 
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { Invoice, InvoiceStatus } from '@/types/invoice';
@@ -15,11 +15,9 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState<'all' | InvoiceStatus>('all');
   
-  // Nouveaux états de recherche et de tri
   const [searchTerm, setSearchTerm] = useState('');
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
 
-  // Récupération des factures
   const fetchInvoices = async () => {
     const { data, error } = await supabase
       .from('invoices')
@@ -95,7 +93,7 @@ export default function DashboardPage() {
   const totalPending = invoices.filter(i => i.status === 'pending').reduce((s, i) => s + calculateTotal(i), 0);
   const totalOverdue = invoices.filter(i => i.status === 'overdue').reduce((s, i) => s + calculateTotal(i), 0);
 
-  // Filtrage combiné (Statut + Texte) et Tri (Date)
+  // Filtrage et Tri
   const filteredInvoices = invoices
     .filter((inv) => {
       const matchesStatus = activeFilter === 'all' || inv.status === activeFilter;
@@ -113,6 +111,66 @@ export default function DashboardPage() {
       const dateB = new Date(b.dueDate).getTime();
       return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
     });
+
+  // Export CSV
+  const handleExportCSV = () => {
+    if (filteredInvoices.length === 0) {
+      alert("Aucune facture à exporter.");
+      return;
+    }
+
+    const headers = [
+      "Numéro",
+      "Client",
+      "Email Client",
+      "Projet",
+      "Date d'émission",
+      "Date d'échéance",
+      "Statut",
+      "Montant HT (€)",
+      "TVA (%)",
+      "Remise (%)",
+      "Montant TTC (€)"
+    ];
+
+    const rows = filteredInvoices.map((inv) => {
+      const totalHT = calculateTotal(inv);
+      const discountAmount = totalHT * (inv.discountPercent / 100);
+      const taxableBase = totalHT - discountAmount;
+      const totalTTC = taxableBase * (1 + inv.taxRate / 100);
+
+      const statusLabel =
+        inv.status === 'paid' ? 'Payée' :
+        inv.status === 'pending' ? 'En attente' : 'En retard';
+
+      const escape = (val: string | number | undefined) => `"${String(val ?? '').replace(/"/g, '""')}"`;
+
+      return [
+        escape(inv.number),
+        escape(inv.clientName),
+        escape(inv.clientEmail),
+        escape(inv.projectTitle),
+        escape(inv.issueDate),
+        escape(inv.dueDate),
+        escape(statusLabel),
+        escape(totalHT.toFixed(2)),
+        escape(inv.taxRate),
+        escape(inv.discountPercent),
+        escape(totalTTC.toFixed(2))
+      ].join(";");
+    });
+
+    const csvContent = "\uFEFF" + [headers.join(";"), ...rows].join("\r\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `factures_export_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
 
   if (loading) {
     return (
@@ -177,10 +235,9 @@ export default function DashboardPage() {
         {/* Section Table avec Barre d'outils */}
         <section className="bg-slate-900/30 border border-slate-900 rounded-2xl p-6 space-y-6">
           
-          {/* Barre d'outils : Recherche + Tri + Filtres de statuts */}
           <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
             
-            {/* Champ de recherche textuelle */}
+            {/* Barre de recherche */}
             <div className="relative flex-1 max-w-md">
               <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
               <input
@@ -200,19 +257,26 @@ export default function DashboardPage() {
               )}
             </div>
 
-            {/* Tri par date et Filtres statut */}
+            {/* Actions : Export CSV + Tri par date + Filtres statut */}
             <div className="flex flex-wrap items-center gap-3">
-              {/* Bouton de bascule de tri par date */}
+              <button
+                onClick={handleExportCSV}
+                title="Exporter les factures affichées en format CSV / Excel"
+                className="px-3 py-1.5 bg-slate-950 border border-slate-800 hover:border-slate-700 hover:text-white rounded-xl text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5 transition-colors"
+              >
+                <Download size={13} className="text-emerald-400" />
+                Exporter CSV ({filteredInvoices.length})
+              </button>
+
               <button
                 onClick={() => setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc')}
                 className="px-3 py-1.5 bg-slate-950 border border-slate-800 hover:border-slate-700 rounded-xl text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5 transition-colors"
-                title="Inverser le tri par date"
+                title="Inverser l'ordre par date"
               >
                 <ArrowUpDown size={13} className="text-indigo-400" />
                 {sortOrder === 'desc' ? 'Plus récentes' : 'Plus anciennes'}
               </button>
 
-              {/* Onglets de statut */}
               <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
                 {(['all', 'paid', 'pending', 'overdue'] as const).map(tab => (
                   <button
@@ -230,7 +294,7 @@ export default function DashboardPage() {
 
           </div>
 
-          {/* Tableau des factures */}
+          {/* Tableau */}
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs text-slate-300">
               <thead className="border-b border-slate-800 text-slate-500 uppercase font-mono tracking-wider">
@@ -289,6 +353,14 @@ export default function DashboardPage() {
                             className="p-1.5 text-slate-400 hover:text-white bg-slate-900 border border-slate-800 hover:border-indigo-500/50 rounded-lg transition-all"
                           >
                             <Eye size={13} />
+                          </Link>
+                          {/* Bouton de modification */}
+                          <Link
+                            href={`/factures/${inv.id}/modifier`}
+                            title="Modifier la facture"
+                            className="p-1.5 text-slate-400 hover:text-indigo-400 bg-slate-900 border border-slate-800 hover:border-indigo-500/50 rounded-lg transition-all"
+                          >
+                            <Pencil size={13} />
                           </Link>
 
                           {inv.status !== 'paid' && (
