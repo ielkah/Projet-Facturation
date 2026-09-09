@@ -35,6 +35,3 @@ The easiest way to deploy your Next.js app is to use the [Vercel Platform](https
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
 
-
-
-Problem si u=on ajoute une facture dans le compte A elle sera ajouté aussi dans le compte B
