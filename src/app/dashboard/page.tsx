@@ -20,7 +20,53 @@ export default function DashboardPage() {
   
   const [searchTerm, setSearchTerm] = useState('');
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
+  const [sendingId, setSendingId] = useState<string | null>(null);
 
+const handleSendReminder = async (inv: Invoice) => {
+  if (!inv.clientEmail) {
+    alert("Impossible de relancer : aucun email n'est renseigné pour ce client.");
+    return;
+  }
+
+  // Calcul du montant TTC pour l'email
+  const totalHT = calculateTotal(inv);
+  const discountAmount = totalHT * (inv.discountPercent / 100);
+  const totalTTC = (totalHT - discountAmount) * (1 + inv.taxRate / 100);
+
+  const confirmSend = confirm(
+    `Envoyer un email de relance à ${inv.clientName} (${inv.clientEmail}) pour la facture ${inv.number} ?`
+  );
+  if (!confirmSend) return;
+
+  setSendingId(inv.id);
+
+  try {
+    const res = await fetch('/api/send-reminder', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        clientEmail: inv.clientEmail,
+        clientName: inv.clientName,
+        invoiceNumber: inv.number,
+        dueDate: inv.dueDate,
+        amountTTC: formatCurrency(totalTTC),
+      }),
+    });
+
+    const result = await res.json();
+
+    if (!res.ok) {
+      throw new Error(result.error || "Échec de l'envoi");
+    }
+
+    alert(`✅ Relance envoyée avec succès à ${inv.clientEmail} !`);
+  } catch (error: any) {
+    console.error(error);
+    alert(`❌ Erreur : ${error.message}`);
+  } finally {
+    setSendingId(null);
+  }
+};
   const fetchInvoices = async () => {
     const { data, error } = await supabase
       .from('invoices')
@@ -398,11 +444,14 @@ export default function DashboardPage() {
 
                           {inv.status === 'overdue' && (
                             <button
-                              onClick={() => alert(`Relance envoyée à ${inv.clientName} (${inv.clientEmail || 'email non renseigné'}).`)}
-                              title="Envoyer un rappel"
-                              className="px-2.5 py-1 bg-rose-500/20 text-rose-300 hover:bg-rose-500/30 border border-rose-500/30 rounded-lg text-[10px] font-bold uppercase inline-flex items-center gap-1 transition-all"
+                              type="button"
+                              disabled={sendingId === inv.id}
+                              onClick={() => handleSendReminder(inv)}
+                              title="Envoyer un rappel par email"
+                              className="px-2.5 py-1 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 disabled:opacity-50 border border-rose-500/30 rounded-lg text-[10px] font-bold uppercase inline-flex items-center gap-1 transition-all"
                             >
-                              <BellRing size={12} /> Relancer
+                              <BellRing size={12} className={sendingId === inv.id ? "animate-spin" : ""} />
+                              {sendingId === inv.id ? "Envoi..." : "Relancer"}
                             </button>
                           )}
 
