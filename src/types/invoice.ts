@@ -1,4 +1,5 @@
-export type InvoiceStatus = 'paid' | 'pending' | 'overdue';
+export type InvoiceStatus = 'draft' | 'pending' | 'paid' | 'overdue';
+export type InvoiceType = 'invoice' | 'credit_note';
 
 export interface InvoiceItem {
   id: string;
@@ -13,6 +14,12 @@ export interface Invoice {
   clientName: string;
   clientEmail: string;
   clientAddress: string;
+  clientLegalForm?: string; 
+  clientSiren?: string;   
+  clientVatNumber?: string; 
+  invoiceType?: InvoiceType;
+  originalInvoiceId?: string; 
+  issuedAt?: string;
   projectTitle: string;
   issueDate: string;
   dueDate: string;
